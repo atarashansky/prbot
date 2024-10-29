@@ -81,17 +81,28 @@ def generate_pr():
     origin.push(branch_name)
     click.echo(f"Pushed branch '{branch_name}' to GitHub.")
 
-    # Create a PR on GitHub
+    # Create or update PR on GitHub
     repo = g.get_repo(
         "/".join(local_repo.remotes.origin.url.split(".git")[0].split("/")[-2:])
     )
-    pr = repo.create_pull(
-        title=f"PR for {branch_name}",
-        body=pr_description,
-        head=branch_name,
-        base="main",
-    )
-    click.echo(f"Created PR: {pr.html_url}")
+
+    # Check if a PR already exists
+    existing_pr = None
+    for pr in repo.get_pulls(state="open", head=branch_name):
+        existing_pr = pr
+        break
+
+    if existing_pr:
+        existing_pr.edit(body=pr_description)
+        click.echo(f"Updated PR description: {existing_pr.html_url}")
+    else:
+        new_pr = repo.create_pull(
+            title=f"PR for {branch_name}",
+            body=pr_description,
+            head=branch_name,
+            base="main",
+        )
+        click.echo(f"Created PR: {new_pr.html_url}")
 
 
 @cli.command()
