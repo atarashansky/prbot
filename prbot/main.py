@@ -1,7 +1,7 @@
 import click
 from github import Github
 from git import Repo
-import openai
+from openai import OpenAI
 import os
 from dotenv import load_dotenv
 import tempfile
@@ -55,14 +55,15 @@ def generate_pr():
         return
 
     # Use ChatGPT to generate PR description
-    openai.api_key = os.getenv("OPENAI_API_KEY")
+    client = OpenAI()
 
     with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
         temp_file.write(diff)
         temp_file.flush()
 
+        file_id = None
         try:
-            response = openai.File.create(
+            response = client.files.create(
                 file=open(temp_file.name, "rb"), purpose="assistants"
             )
             file_id = response.id
@@ -78,7 +79,7 @@ def generate_pr():
                 },
             ]
 
-            response = openai.ChatCompletion.create(
+            response = client.chat.completions.create(
                 model="gpt-4o", messages=messages, file_ids=[file_id]
             )
 
@@ -92,7 +93,8 @@ def generate_pr():
 
         finally:
             os.unlink(temp_file.name)
-            openai.File.delete(file_id)
+            if file_id:
+                client.files.delete(file_id)
 
 
 @cli.command()
