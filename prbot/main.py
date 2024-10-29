@@ -29,9 +29,11 @@ def load_config():
 load_config()
 
 
-@click.group()
-def cli():
-    pass
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx):
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(generate_pr)
 
 
 @cli.command()
