@@ -57,7 +57,9 @@ def generate_pr():
     # Use ChatGPT to generate PR description
     client = OpenAI()
 
-    with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
+    with tempfile.NamedTemporaryFile(
+        mode="w+", suffix=".txt", delete=False
+    ) as temp_file:
         temp_file.write(diff)
         temp_file.flush()
 
@@ -80,7 +82,7 @@ def generate_pr():
             ]
 
             response = client.chat.completions.create(
-                model="gpt-4o", messages=messages, file_ids=[file_id]
+                model="gpt-4", messages=messages, file_ids=[file_id]
             )
 
             pr_description = response.choices[0].message.content
