@@ -124,15 +124,5 @@ def setup_github(token):
     click.echo("GitHub Personal Access Token has been stored in global config file.")
 
 
-@cli.command()
-@click.argument("repo_name")
-def setup_repo(repo_name):
-    """Sets up the repository name in the global config file."""
-    config_file = os.path.join(get_config_dir(), "config")
-    with open(config_file, "a") as f:
-        f.write(f"REPO_NAME={repo_name}\n")
-    click.echo("Repository name has been stored in global config file.")
-
-
 if __name__ == "__main__":
     cli()
