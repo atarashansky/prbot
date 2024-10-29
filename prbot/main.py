@@ -94,7 +94,7 @@ def generate_pr():
 
             # Create a PR on GitHub
             repo = g.get_repo(
-                local_repo.remotes.origin.url.split(".git")[0].split("/")[-2:]
+                "/".join(local_repo.remotes.origin.url.split(".git")[0].split("/")[-2:])
             )
             pr = repo.create_pull(
                 title=f"PR for {branch_name}",
