@@ -45,13 +45,6 @@ def generate_pr():
         return
 
     g = Github(token)
-    repo_name = os.getenv("REPO_NAME")
-    if not repo_name:
-        click.echo("Repository name not found in .env file.")
-        return
-
-    repo = g.get_repo(repo_name)
-
     # Get current repo diff
     local_repo = Repo(".")
     branch_name = local_repo.active_branch.name
