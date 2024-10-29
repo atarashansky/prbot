@@ -59,57 +59,39 @@ def generate_pr():
     # Use ChatGPT to generate PR description
     client = OpenAI()
 
-    with tempfile.NamedTemporaryFile(
-        mode="w+", suffix=".txt", delete=False
-    ) as temp_file:
-        temp_file.write(diff)
-        temp_file.flush()
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a helpful assistant that generates PR descriptions based on git diffs.",
+        },
+        {
+            "role": "user",
+            "content": f"Please generate a concise PR description based on the git diff:\n\n {diff}",
+        },
+    ]
 
-        file_id = None
-        try:
-            file = client.files.create(
-                file=open(temp_file.name, "rb"), purpose="assistants"
-            )
-            file_id = file.id
+    response = client.chat.completions.create(model="gpt-4", messages=messages)
 
-            messages = [
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant that generates PR descriptions based on git diffs.",
-                },
-                {
-                    "role": "user",
-                    "content": f"Please generate a concise PR description based on the git diff in the uploaded file: {file.id}. The branch name is {branch_name}.",
-                },
-            ]
+    pr_description = response.choices[0].message.content
 
-            response = client.chat.completions.create(model="gpt-4", messages=messages)
+    click.echo(f"Generated PR description:\n\n{pr_description}")
 
-            pr_description = response.choices[0].message.content
+    # Push the branch to GitHub
+    origin = local_repo.remote(name="origin")
+    origin.push(branch_name)
+    click.echo(f"Pushed branch '{branch_name}' to GitHub.")
 
-            click.echo(f"Generated PR description:\n\n{pr_description}")
-
-            # Push the branch to GitHub
-            origin = local_repo.remote(name="origin")
-            origin.push(branch_name)
-            click.echo(f"Pushed branch '{branch_name}' to GitHub.")
-
-            # Create a PR on GitHub
-            repo = g.get_repo(
-                "/".join(local_repo.remotes.origin.url.split(".git")[0].split("/")[-2:])
-            )
-            pr = repo.create_pull(
-                title=f"PR for {branch_name}",
-                body=pr_description,
-                head=branch_name,
-                base="main",
-            )
-            click.echo(f"Created PR: {pr.html_url}")
-
-        finally:
-            os.unlink(temp_file.name)
-            if file_id:
-                client.files.delete(file_id)
+    # Create a PR on GitHub
+    repo = g.get_repo(
+        "/".join(local_repo.remotes.origin.url.split(".git")[0].split("/")[-2:])
+    )
+    pr = repo.create_pull(
+        title=f"PR for {branch_name}",
+        body=pr_description,
+        head=branch_name,
+        base="main",
+    )
+    click.echo(f"Created PR: {pr.html_url}")
 
 
 @cli.command()
