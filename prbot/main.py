@@ -65,10 +65,10 @@ def generate_pr():
 
         file_id = None
         try:
-            response = client.files.create(
+            file = client.files.create(
                 file=open(temp_file.name, "rb"), purpose="assistants"
             )
-            file_id = response.id
+            file_id = file.id
 
             messages = [
                 {
@@ -77,21 +77,32 @@ def generate_pr():
                 },
                 {
                     "role": "user",
-                    "content": f"Please generate a concise PR description based on the git diff in the uploaded file. The branch name is {branch_name}.",
+                    "content": f"Please generate a concise PR description based on the git diff in the uploaded file: {file.id}. The branch name is {branch_name}.",
                 },
             ]
 
-            response = client.chat.completions.create(
-                model="gpt-4", messages=messages, file_ids=[file_id]
-            )
+            response = client.chat.completions.create(model="gpt-4", messages=messages)
 
             pr_description = response.choices[0].message.content
 
             click.echo(f"Generated PR description:\n\n{pr_description}")
 
-            # (Optional) Update or create a PR on GitHub
-            # pr = repo.create_pull(title=f"PR for {branch_name}", body=pr_description, head=branch_name, base="main")
-            # click.echo(f"Created PR: {pr.html_url}")
+            # Push the branch to GitHub
+            origin = local_repo.remote(name="origin")
+            origin.push(branch_name)
+            click.echo(f"Pushed branch '{branch_name}' to GitHub.")
+
+            # Create a PR on GitHub
+            repo = g.get_repo(
+                local_repo.remotes.origin.url.split(".git")[0].split("/")[-2:]
+            )
+            pr = repo.create_pull(
+                title=f"PR for {branch_name}",
+                body=pr_description,
+                head=branch_name,
+                base="main",
+            )
+            click.echo(f"Created PR: {pr.html_url}")
 
         finally:
             os.unlink(temp_file.name)
