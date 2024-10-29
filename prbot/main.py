@@ -1,7 +1,7 @@
 import click
 from github import Github
 from git import Repo
-import openai
+from openai import OpenAI
 import os
 from dotenv import load_dotenv
 import tempfile
@@ -29,9 +29,11 @@ def load_config():
 load_config()
 
 
-@click.group()
-def cli():
-    pass
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx):
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(generate_pr)
 
 
 @cli.command()
@@ -45,13 +47,6 @@ def generate_pr():
         return
 
     g = Github(token)
-    repo_name = os.getenv("REPO_NAME")
-    if not repo_name:
-        click.echo("Repository name not found in .env file.")
-        return
-
-    repo = g.get_repo(repo_name)
-
     # Get current repo diff
     local_repo = Repo(".")
     branch_name = local_repo.active_branch.name
@@ -62,44 +57,52 @@ def generate_pr():
         return
 
     # Use ChatGPT to generate PR description
-    openai.api_key = os.getenv("OPENAI_API_KEY")
+    client = OpenAI()
 
-    with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:
-        temp_file.write(diff)
-        temp_file.flush()
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a helpful assistant that generates PR descriptions based on git diffs.",
+        },
+        {
+            "role": "user",
+            "content": f"Please generate a concise PR description based on the git diff:\n\n {diff}",
+        },
+    ]
 
-        try:
-            response = openai.File.create(
-                file=open(temp_file.name, "rb"), purpose="assistants"
-            )
-            file_id = response.id
+    response = client.chat.completions.create(model="gpt-4", messages=messages)
 
-            messages = [
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant that generates PR descriptions based on git diffs.",
-                },
-                {
-                    "role": "user",
-                    "content": f"Please generate a concise PR description based on the git diff in the uploaded file. The branch name is {branch_name}.",
-                },
-            ]
+    pr_description = response.choices[0].message.content
 
-            response = openai.ChatCompletion.create(
-                model="gpt-4o", messages=messages, file_ids=[file_id]
-            )
+    click.echo(f"Generated PR description:\n\n{pr_description}")
 
-            pr_description = response.choices[0].message.content
+    # Push the branch to GitHub
+    origin = local_repo.remote(name="origin")
+    origin.push(branch_name)
+    click.echo(f"Pushed branch '{branch_name}' to GitHub.")
 
-            click.echo(f"Generated PR description:\n\n{pr_description}")
+    # Create or update PR on GitHub
+    repo = g.get_repo(
+        "/".join(local_repo.remotes.origin.url.split(".git")[0].split("/")[-2:])
+    )
 
-            # (Optional) Update or create a PR on GitHub
-            # pr = repo.create_pull(title=f"PR for {branch_name}", body=pr_description, head=branch_name, base="main")
-            # click.echo(f"Created PR: {pr.html_url}")
+    # Check if a PR already exists
+    existing_pr = None
+    for pr in repo.get_pulls(state="open", head=branch_name):
+        existing_pr = pr
+        break
 
-        finally:
-            os.unlink(temp_file.name)
-            openai.File.delete(file_id)
+    if existing_pr:
+        existing_pr.edit(body=pr_description)
+        click.echo(f"Updated PR description: {existing_pr.html_url}")
+    else:
+        new_pr = repo.create_pull(
+            title=f"PR for {branch_name}",
+            body=pr_description,
+            head=branch_name,
+            base="main",
+        )
+        click.echo(f"Created PR: {new_pr.html_url}")
 
 
 @cli.command()
@@ -122,16 +125,6 @@ def setup_github(token):
     with open(config_file, "a") as f:
         f.write(f"GITHUB_TOKEN={token}\n")
     click.echo("GitHub Personal Access Token has been stored in global config file.")
-
-
-@cli.command()
-@click.argument("repo_name")
-def setup_repo(repo_name):
-    """Sets up the repository name in the global config file."""
-    config_file = os.path.join(get_config_dir(), "config")
-    with open(config_file, "a") as f:
-        f.write(f"REPO_NAME={repo_name}\n")
-    click.echo("Repository name has been stored in global config file.")
 
 
 if __name__ == "__main__":
