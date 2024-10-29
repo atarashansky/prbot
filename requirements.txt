@@ -1,0 +1,5 @@
+PyGithub
+gitpython
+Click
+python-dotenv
+openai
